@@ -1,9 +1,14 @@
+from PyQt5.QtCore import forcepoint
 import numpy as np
-from numpy import sin, cos, arctan2
+from numpy import pi, sin, cos, arctan2
 from itertools import cycle
 from sys import argv, exit
+from numpy import typing
 import pyqtgraph as pg
 from pyqtgraph import QtCore, QtGui
+import typing as type
+import time
+
 
 class InvertedPendulum(QtGui.QWidget):
     '''Inicjalizacja stałych:
@@ -28,17 +33,22 @@ class InvertedPendulum(QtGui.QWidget):
     h_max - maksymalna współrzędna pionowa
 
     Powyższe dane są pobierane z pliku jeśli zmienna f_name nie jest pusta'''
+
     def __init__(self, M=10, m=5, l=50, x0=0, theta0=0, dx0=0, dtheta0=0, dis_cyc=True, disruption=[0], iw=1000, ih=500, x_max=100, h_min=0, h_max=100, f_name=None):
         if f_name:
             with open(f_name) as f_handle:
                 lines = f_handle.readlines()
                 init_cond = lines[0].split(' ')
-                self.M, self.m, self.l, self.x0, self.theta0, self.dx0, self.dtheta0 = [float(el) for el in init_cond[:7]]
-                self.image_w, self.image_h, self.x_max, self.h_min, self.h_max = [int(el) for el in init_cond[-5:]]
+                self.M, self.m, self.l, self.x0, self.theta0, self.dx0, self.dtheta0 = [
+                    float(el) for el in init_cond[:7]]
+                self.image_w, self.image_h, self.x_max, self.h_min, self.h_max = [
+                    int(el) for el in init_cond[-5:]]
                 if lines[1]:
-                    self.disruption = cycle([float(el) for el in lines[2].split(' ')])
+                    self.disruption = cycle([float(el)
+                                            for el in lines[2].split(' ')])
                 else:
-                    self.disruption = iter([float(el) for el in lines[2].split(' ')])
+                    self.disruption = iter([float(el)
+                                           for el in lines[2].split(' ')])
         else:
             self.M, self.m, self.l, self.x0, self.theta0, self.dx0, self.dtheta0 = M, m, l, x0, theta0, dx0, dtheta0
             self.image_w, self.image_h, self.x_max, self.h_min, self.h_max = iw, ih, x_max, h_min, h_max
@@ -74,13 +84,15 @@ class InvertedPendulum(QtGui.QWidget):
         painter.setPen(pg.mkPen('k', width=2.0*self.h_scale))
         painter.drawLine(0, hor, image_w, hor)
         painter.setPen(pg.mkPen((165, 42, 42), width=2.0*self.x_scale))
-        painter.drawLine(x_scale*(x+x_max), hor, x_scale*(x+x_max-l*sin(theta)), hor-h_scale*(l*cos(theta)))
+        painter.drawLine(x_scale*(x+x_max), hor, x_scale *
+                         (x+x_max-l*sin(theta)), hor-h_scale*(l*cos(theta)))
         painter.setPen(pg.mkPen('b'))
         painter.setBrush(pg.mkBrush('b'))
         painter.drawRect(x_scale*(x+x_max)-c_w/2, hor-c_h/2, c_w, c_h)
         painter.setPen(pg.mkPen('r'))
         painter.setBrush(pg.mkBrush('r'))
-        painter.drawEllipse(x_scale*(x+x_max-l*sin(theta)-r/2), hor-h_scale*(l*cos(theta)+r/2), r*x_scale, r*h_scale)
+        painter.drawEllipse(x_scale*(x+x_max-l*sin(theta)-r/2),
+                            hor-h_scale*(l*cos(theta)+r/2), r*x_scale, r*h_scale)
         painter.setPen(pg.mkPen('k'))
         for i in np.arange(-x_max, x_max, x_max/10):
             painter.drawText((i+x_max)*x_scale, image_h-10, str(int(i)))
@@ -126,24 +138,167 @@ class InvertedPendulum(QtGui.QWidget):
     # Gdzie n - to frameskip
     def single_loop_run(self):
         for i in range(self.frameskip+1):
-            dis=next(self.disruption, 0)
-            control = self.fuzzy_control(self.x, self.theta, self.dx, self.dtheta)
+            dis = next(self.disruption, 0)
+            control = self.fuzzy_control(
+                self.x, self.theta, self.dx, self.dtheta)
             F = dis+control
             self.count_state_params(F)
             if not self.sandbox:
                 if self.x < -self.x_max or self.x > self.x_max or np.abs(self.theta) > np.pi/3:
                     exit(1)
         self.update()
-        
+
     # Regulator rozmyty, który trzeba zaimplementować
     def fuzzy_control(self, x, theta, dx, dtheta):
-        return 0
+        forceMin: float = -500
+        forceMax: float = 500
+        numberOfPoints: int = 10
+        forceValues: type.List[float] = np.linspace(
+            forceMin, forceMax, numberOfPoints).tolist()
+
+        slowlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_pendulum_slow_ratation(dtheta))
+        fastlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_pendulum_fast_ratation(dtheta))
+
+        slowlyRight: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
+            theta), self.fuzzy_pendulum_slow_ratation(dtheta))
+        fastlyRight: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
+            theta), self.fuzzy_pendulum_fast_ratation(dtheta))
+
+        slowlyLeftValues: type.List[float] = []
+        fastlyLeftValues: type.List[float] = []
+
+        slowlyRightValues: type.List[float] = []
+        fastlyRightValues: type.List[float] = []
+
+        for value in forceValues:
+            slowlyLeftValues.append(self.cut_off_value(
+                self.fuzzy_cart_slowly_left(value), slowlyLeft))
+            fastlyLeftValues.append(self.cut_off_value(
+                self.fuzzy_cart_fastly_left(value), fastlyLeft))
+
+            slowlyRightValues.append(self.cut_off_value(
+                self.fuzzy_cart_slowly_right(value), slowlyRight))
+            fastlyRightValues.append(self.cut_off_value(
+                self.fuzzy_cart_fastly_right(value), fastlyRight))
+
+        finalValues: type.List[float] = []
+
+        for num in range(numberOfPoints):
+            value: float = self.fuzzy_or(
+                slowlyLeftValues[num], fastlyLeftValues[num], slowlyRightValues[num], fastlyRightValues[num])
+            finalValues.append(value)
+
+        regulator_output: float = self.calc_regulator_output(
+            forceValues, finalValues)
+        print(regulator_output)
+
+        return regulator_output
+
+    ###################
+    # ADDED FUNCTIONS #
+    ###################
+
+    def fuzzy_not(self, value: float) -> float:
+        return 1 - value
+
+    def fuzzy_and(self, *args: float) -> float:
+        return min(args)
+
+    def fuzzy_or(self, *args: float) -> float:
+        return max(args)
+
+    def fuzzy_pendulum_on_right(self, theta: float) -> float:
+        if(theta < -pi/6):
+            return 1
+        elif theta > 0:
+            return 0
+        else:
+            return (-6/pi) * theta
+
+    def fuzzy_pendulum_on_left(self, theta: float) -> float:
+        if(theta > pi/6):
+            return 1
+        elif theta < 0:
+            return 0
+        else:
+            return (6/pi) * theta
+
+    def fuzzy_pendulum_slow_ratation(self, dtheta: float) -> float:
+        if(abs(dtheta) < 0.1):
+            return 1
+        elif abs(dtheta) > 0.2:
+            return 0
+        else:
+            return (-10 * dtheta) + 2
+
+    def fuzzy_pendulum_fast_ratation(self, dtheta: float) -> float:
+        if(abs(dtheta) > 0.2):
+            return 1
+        elif abs(dtheta) < 0.1:
+            return 0
+        else:
+            return (10 * dtheta) - 1
+
+    def fuzzy_cart_slowly_right(self, force: float) -> float:
+        if force <= 1:
+            return 1
+        elif force < 2:
+            return -force + 2
+        else:
+            return 0
+
+    def fuzzy_cart_fastly_right(self, force: float) -> float:
+        if force < 1:
+            return 0
+        elif force <= 2:
+            return force - 1
+        else:
+            return 1
+
+    def fuzzy_cart_slowly_left(self, force: float) -> float:
+        if force > -1:
+            return 1
+        elif force >= -2:
+            return force + 2
+        else:
+            return 0
+
+    def fuzzy_cart_fastly_left(self, force: float) -> float:
+        if force > -1:
+            return 0
+        elif force >= -2:
+            return -force - 1
+        else:
+            return 1
+
+    def calc_regulator_output(self, xValues: type.List[float], yValues: type.List[float]) -> float:
+        points: type.List[type.List[float]] = []
+        for x, y in zip(xValues, yValues):
+            points.append([x, y])
+        # print(yValues)
+        try:
+            centerOfMass = np.average(points, axis=0, weights=yValues)
+        except ZeroDivisionError:
+            print('ZERO')
+            return 0
+
+        return centerOfMass[0]
+
+    def cut_off_value(self, value: float, treshold: float) -> float:
+        if value > treshold:
+            return treshold
+        else:
+            return value
+
 
 if __name__ == '__main__':
     app = QtGui.QApplication(argv)
-    if len(argv)>1:
+    if len(argv) > 1:
         ip = InvertedPendulum(f_name=argv[1])
     else:
-        ip = InvertedPendulum(x0=90, dx0=0, theta0=0, dtheta0=0.1, ih=800, iw=1000, h_min=-80, h_max=80)
+        ip = InvertedPendulum(x0=90, dx0=0, theta0=0,
+                              dtheta0=0.1, ih=800, iw=1000, h_min=-80, h_max=80)
     ip.run(sandbox=True)
     exit(app.exec_())
