@@ -8,6 +8,7 @@ import pyqtgraph as pg
 from pyqtgraph import QtCore, QtGui
 import typing as type
 import time
+import matplotlib.pyplot as plt
 
 
 class InvertedPendulum(QtGui.QWidget):
@@ -150,36 +151,52 @@ class InvertedPendulum(QtGui.QWidget):
 
     # Regulator rozmyty, który trzeba zaimplementować
     def fuzzy_control(self, x, theta, dx, dtheta):
-        forceMin: float = -500
-        forceMax: float = 500
-        numberOfPoints: int = 10
+        forceMin: float = -100
+        forceMax: float = 100
+        numberOfPoints: int = 100
         forceValues: type.List[float] = np.linspace(
             forceMin, forceMax, numberOfPoints).tolist()
 
-        slowlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_pendulum_slow_ratation(dtheta))
-        fastlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_pendulum_fast_ratation(dtheta))
+        slowlyLeft: float = self.fuzzy_and(self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_pendulum_on_right(theta))), self.fuzzy_pendulum_slow_ratation_left(dtheta))
+        slowlyRight: float = self.fuzzy_and(self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_pendulum_on_right(theta))), self.fuzzy_pendulum_slow_ratation_right(dtheta))
 
-        slowlyRight: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
-            theta), self.fuzzy_pendulum_slow_ratation(dtheta))
+        fastlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_pendulum_fast_ratation_left(dtheta))
         fastlyRight: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
-            theta), self.fuzzy_pendulum_fast_ratation(dtheta))
+            theta), self.fuzzy_pendulum_fast_ratation_right(dtheta))
+
+        slowlyLeft2: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
+            theta), self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_slow_ratation_left(dtheta), self.fuzzy_pendulum_fast_ratation_left(dtheta))))
+        slowlyRight2: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
+            theta), self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_slow_ratation_right(dtheta), self.fuzzy_pendulum_fast_ratation_right(dtheta))))
+
+        # fastlyLeft: float = self.fuzzy_pendulum_on_left(theta)
+        # fastlyRight: float = self.fuzzy_pendulum_on_right(theta)
 
         slowlyLeftValues: type.List[float] = []
-        fastlyLeftValues: type.List[float] = []
-
         slowlyRightValues: type.List[float] = []
+
+        slowlyLeft2Values: type.List[float] = []
+        slowlyRight2Values: type.List[float] = []
+
+        fastlyLeftValues: type.List[float] = []
         fastlyRightValues: type.List[float] = []
 
         for value in forceValues:
             slowlyLeftValues.append(self.cut_off_value(
                 self.fuzzy_cart_slowly_left(value), slowlyLeft))
-            fastlyLeftValues.append(self.cut_off_value(
-                self.fuzzy_cart_fastly_left(value), fastlyLeft))
-
             slowlyRightValues.append(self.cut_off_value(
                 self.fuzzy_cart_slowly_right(value), slowlyRight))
+
+            slowlyLeft2Values.append(self.cut_off_value(
+                self.fuzzy_cart_slowly_left(value), slowlyLeft2))
+            slowlyRight2Values.append(self.cut_off_value(
+                self.fuzzy_cart_slowly_right(value), slowlyRight2))
+
+            fastlyLeftValues.append(self.cut_off_value(
+                self.fuzzy_cart_fastly_left(value), fastlyLeft))
             fastlyRightValues.append(self.cut_off_value(
                 self.fuzzy_cart_fastly_right(value), fastlyRight))
 
@@ -187,14 +204,15 @@ class InvertedPendulum(QtGui.QWidget):
 
         for num in range(numberOfPoints):
             value: float = self.fuzzy_or(
-                slowlyLeftValues[num], fastlyLeftValues[num], slowlyRightValues[num], fastlyRightValues[num])
+                slowlyLeftValues[num], fastlyLeftValues[num], slowlyRightValues[num], fastlyRightValues[num], slowlyLeft2Values[num], slowlyRight2Values[num])
             finalValues.append(value)
 
         regulator_output: float = self.calc_regulator_output(
             forceValues, finalValues)
-        print(regulator_output)
+        # print(regulator_output)
+        #print(theta, dtheta)
 
-        return regulator_output
+        return 0
 
     ###################
     # ADDED FUNCTIONS #
@@ -210,66 +228,86 @@ class InvertedPendulum(QtGui.QWidget):
         return max(args)
 
     def fuzzy_pendulum_on_right(self, theta: float) -> float:
-        if(theta < -pi/6):
+        if(theta < -pi/18):
             return 1
         elif theta > 0:
             return 0
         else:
-            return (-6/pi) * theta
+            return (-18/pi) * theta
 
     def fuzzy_pendulum_on_left(self, theta: float) -> float:
-        if(theta > pi/6):
+        if(theta > pi/18):
             return 1
         elif theta < 0:
             return 0
         else:
-            return (6/pi) * theta
+            return (18/pi) * theta
 
-    def fuzzy_pendulum_slow_ratation(self, dtheta: float) -> float:
-        if(abs(dtheta) < 0.1):
+    def fuzzy_pendulum_slow_ratation_left(self, dtheta: float) -> float:
+        if(dtheta <= 0.005):
+            return dtheta * 200
+        elif dtheta < 0.01:
             return 1
-        elif abs(dtheta) > 0.2:
+        elif dtheta < 0.03:
+            return (-50 * dtheta) + 1.5
+        else:
+            return 0
+
+    def fuzzy_pendulum_slow_ratation_right(self, dtheta: float) -> float:
+        if(abs(dtheta) >= -0.005):
+            return -dtheta * 200
+        elif dtheta > -0.01:
+            return 1
+        elif dtheta > -0.03:
+            return (-50 * -dtheta) + 1.5
+        else:
+            return 0
+
+    def fuzzy_pendulum_fast_ratation_left(self, dtheta: float) -> float:
+        if(dtheta > 0.04):
+            return 1
+        elif dtheta < 0.02:
             return 0
         else:
-            return (-10 * dtheta) + 2
+            return (50 * dtheta) - 1
 
-    def fuzzy_pendulum_fast_ratation(self, dtheta: float) -> float:
-        if(abs(dtheta) > 0.2):
+    def fuzzy_pendulum_fast_ratation_right(self, dtheta: float) -> float:
+        if(dtheta < -0.04):
             return 1
-        elif abs(dtheta) < 0.1:
+        elif dtheta > -0.02:
             return 0
         else:
-            return (10 * dtheta) - 1
+            return (50 * -dtheta) - 1
 
     def fuzzy_cart_slowly_right(self, force: float) -> float:
-        if force <= 1:
+        if force <= 5:
             return 1
-        elif force < 2:
-            return -force + 2
+        elif force < 10:
+            return (-force/5) + 2
         else:
             return 0
 
     def fuzzy_cart_fastly_right(self, force: float) -> float:
-        if force < 1:
+        if force < 5:
             return 0
-        elif force <= 2:
-            return force - 1
+        elif force <= 10:
+            return (force/5) - 1
         else:
             return 1
 
     def fuzzy_cart_slowly_left(self, force: float) -> float:
-        if force > -1:
+        if force > -5:
             return 1
-        elif force >= -2:
-            return force + 2
+        elif force >= -10:
+            return force/5 + 2
         else:
             return 0
 
     def fuzzy_cart_fastly_left(self, force: float) -> float:
-        if force > -1:
+        if force > -5:
             return 0
-        elif force >= -2:
-            return -force - 1
+        elif force >= -10:
+            return -force/5 - 1
         else:
             return 1
 
