@@ -9,6 +9,10 @@ from pyqtgraph import QtCore, QtGui
 import typing as type
 import time
 import matplotlib.pyplot as plt
+from point import Point
+from trapezoidFunction import TrapezoidFunction
+
+from triangleFunction import TriangleFunction
 
 
 class InvertedPendulum(QtGui.QWidget):
@@ -151,72 +155,178 @@ class InvertedPendulum(QtGui.QWidget):
 
     # Regulator rozmyty, który trzeba zaimplementować
     def fuzzy_control(self, x, theta, dx, dtheta):
-        forceMin: float = -100
-        forceMax: float = 100
-        numberOfPoints: int = 100
-        forceValues: type.List[float] = np.linspace(
-            forceMin, forceMax, numberOfPoints).tolist()
+        # forceMin: float = -100
+        # forceMax: float = 100
+        # numberOfPoints: int = 100
+        # forceValues: type.List[float] = np.linspace(
+        #     forceMin, forceMax, numberOfPoints).tolist()
 
-        slowlyLeft: float = self.fuzzy_and(self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_pendulum_on_right(theta))), self.fuzzy_pendulum_slow_ratation_left(dtheta))
-        slowlyRight: float = self.fuzzy_and(self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_pendulum_on_right(theta))), self.fuzzy_pendulum_slow_ratation_right(dtheta))
+        doNothing: float = self.fuzzy_and(self.pendulum_in_center.value(
+            theta), self.pendulum_zero_speed.value(dtheta))
 
-        fastlyLeft: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_pendulum_fast_ratation_left(dtheta))
-        fastlyRight: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
-            theta), self.fuzzy_pendulum_fast_ratation_right(dtheta))
+        goLeft: float = self.fuzzy_and(self.pendulum_slightly_left.value(theta), self.fuzzy_or(
+            self.pendulum_slow_left.value(theta), self.pendulum_fast_left.value(theta)))
+        goRight: float = self.fuzzy_and(self.pendulum_slightly_right.value(theta), self.fuzzy_or(
+            self.pendulum_slow_right.value(theta), self.pendulum_fast_right.value(theta)))
 
-        slowlyLeft2: float = self.fuzzy_and(self.fuzzy_pendulum_on_left(
-            theta), self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_slow_ratation_left(dtheta), self.fuzzy_pendulum_fast_ratation_left(dtheta))))
-        slowlyRight2: float = self.fuzzy_and(self.fuzzy_pendulum_on_right(
-            theta), self.fuzzy_not(self.fuzzy_or(self.fuzzy_pendulum_slow_ratation_right(dtheta), self.fuzzy_pendulum_fast_ratation_right(dtheta))))
+        goStrongLeft: float = self.fuzzy_and(self.pendulum_left.value(theta), self.fuzzy_or(
+            self.pendulum_slow_left.value(theta), self.pendulum_fast_left.value(theta)))
+        goStrongRight: float = self.fuzzy_and(self.pendulum_right.value(theta), self.fuzzy_or(
+            self.pendulum_slow_right.value(theta), self.pendulum_fast_right.value(theta)))
 
-        # fastlyLeft: float = self.fuzzy_pendulum_on_left(theta)
-        # fastlyRight: float = self.fuzzy_pendulum_on_right(theta)
+        pushLeft: float = self.fuzzy_and(self.pendulum_slightly_left.value(
+            theta), self.pendulum_zero_speed.value(dtheta))
 
-        slowlyLeftValues: type.List[float] = []
-        slowlyRightValues: type.List[float] = []
+        pushRight: float = self.fuzzy_and(self.pendulum_slightly_right.value(
+            theta), self.pendulum_zero_speed.value(dtheta))
 
-        slowlyLeft2Values: type.List[float] = []
-        slowlyRight2Values: type.List[float] = []
+        pushLightLeft: float = self.fuzzy_and(self.fuzzy_not(self.pendulum_in_center.value(
+            theta)), self.pendulum_slow_left.value(dtheta))
 
-        fastlyLeftValues: type.List[float] = []
-        fastlyRightValues: type.List[float] = []
+        pushLightRight: float = self.fuzzy_and(self.fuzzy_not(self.pendulum_in_center.value(
+            theta)), self.pendulum_slow_right.value(dtheta))
 
-        for value in forceValues:
-            slowlyLeftValues.append(self.cut_off_value(
-                self.fuzzy_cart_slowly_left(value), slowlyLeft))
-            slowlyRightValues.append(self.cut_off_value(
-                self.fuzzy_cart_slowly_right(value), slowlyRight))
+        cartOnZero: float = self.cart_in_zero.value(x)
+        cartToRight: float = self.fuzzy_and(self.cart_on_left.value(x), self.fuzzy_or(
+            self.pendulum_in_center.value(theta), self.pendulum_slightly_right.value(theta)), self.cart_zero_speed.value(dx), self.fuzzy_not(self.fuzzy_or(self.cart_fast_right.value(dx), self.cart_slowly_right.value(dx))))
+        cartToLeft: float = self.fuzzy_and(self.cart_on_right.value(x), self.fuzzy_or(
+            self.pendulum_in_center.value(theta), self.pendulum_slightly_left.value(theta)), self.cart_zero_speed.value(dx), self.fuzzy_not(self.fuzzy_or(self.cart_fast_left.value(dx), self.cart_slowly_left.value(dx))))
 
-            slowlyLeft2Values.append(self.cut_off_value(
-                self.fuzzy_cart_slowly_left(value), slowlyLeft2))
-            slowlyRight2Values.append(self.cut_off_value(
-                self.fuzzy_cart_slowly_right(value), slowlyRight2))
+        brake_on_left = self.fuzzy_and(
+            self.cart_in_zero.value(x), self.cart_fast_right.value(dx))
+        brake_on_right = self.fuzzy_and(
+            self.cart_in_zero.value(x), self.cart_fast_left.value(dx))
 
-            fastlyLeftValues.append(self.cut_off_value(
-                self.fuzzy_cart_fastly_left(value), fastlyLeft))
-            fastlyRightValues.append(self.cut_off_value(
-                self.fuzzy_cart_fastly_right(value), fastlyRight))
+        #cart_nothing, cart_light_left, cart_light_right, cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right
+        weights: type.List[float] = [doNothing, pushLightLeft,
+                                     pushLightRight,  goLeft, goRight, goStrongLeft, goStrongRight]
+        #  [doNothing, pushLightLeft,
+        #  pushLightRight,  goLeft, goRight, goStrongLeft, goStrongRight, cartOnZero, cartToRight, cartToLeft, brake_on_left, brake_on_right]
 
-        finalValues: type.List[float] = []
+        # doNothingValues: type.List[float] = []
 
-        for num in range(numberOfPoints):
-            value: float = self.fuzzy_or(
-                slowlyLeftValues[num], fastlyLeftValues[num], slowlyRightValues[num], fastlyRightValues[num], slowlyLeft2Values[num], slowlyRight2Values[num])
-            finalValues.append(value)
+        # goLeftValues: type.List[float] = []
+        # goRightValues: type.List[float] = []
 
-        regulator_output: float = self.calc_regulator_output(
-            forceValues, finalValues)
+        # goStrongLeftValues: type.List[float] = []
+        # goStrongRightValues: type.List[float] = []
+
+        # pushLeftValues: type.List[float] = []
+        # pushRightValues: type.List[float] = []
+
+        # pushLightRightValues: type.List[float] = []
+        # pushLightLeftValues: type.List[float] = []
+
+        # for value in forceValues:
+        #     doNothingValues.append(self.cut_off_value(
+        #         self.cart_nothing.value(value), doNothing))
+        #     goLeftValues.append(self.cut_off_value(
+        #         self.cart_light_left.value(value), goLeft))
+        #     goRightValues.append(self.cut_off_value(
+        #         self.cart_light_right.value(value), goRight))
+        #     goStrongLeftValues.append(self.cut_off_value(
+        #         self.cart_strong_left.value(value), goStrongLeft))
+        #     goStrongRightValues.append(self.cut_off_value(
+        #         self.cart_strong_right.value(value), goStrongRight))
+
+        #     pushLeftValues.append(self.cut_off_value(
+        #         self.cart_strong_left.value(value), pushLeft))
+        #     pushRightValues.append(self.cut_off_value(
+        #         self.cart_strong_right.value(value), pushRight))
+
+        #     pushLightLeftValues.append(self.cut_off_value(
+        #         self.cart_light_left.value(value), pushLightLeft))
+        #     pushLightRightValues.append(self.cut_off_value(
+        #         self.cart_light_right.value(value), pushLightRight))
+
+        # finalValues: type.List[float] = []
+
+        # for num in range(numberOfPoints):
+        #     value: float = self.fuzzy_or(
+        #         doNothingValues[num], goLeftValues[num], goRightValues[num], goStrongLeftValues[num], goStrongRightValues[num])
+        #     finalValues.append(value)
+
+        # regulator_output: float = self.calc_regulator_output(
+        #     forceValues, finalValues)
+        regulator_output: float = self.calc_regulator_output_v2(
+            self.cart_force_values, weights)
         # print(regulator_output)
         #print(theta, dtheta)
+        # print(dx)
+        return regulator_output
 
-        return 0
+    #############################
+    # ADDED FUNCTIONS/VARIABLES #
+    #############################
 
-    ###################
-    # ADDED FUNCTIONS #
-    ###################
+    # position
+    pendulum_in_center = TriangleFunction(
+        Point(np.deg2rad(-1), 0), Point(0, 1), Point(np.deg2rad(1), 0))
+    pendulum_slightly_left = TriangleFunction(
+        Point(np.deg2rad(0), 0), Point(np.deg2rad(2), 1), Point(np.deg2rad(4), 0))
+    pendulum_slightly_right = TriangleFunction(
+        Point(np.deg2rad(-4), 0), Point(np.deg2rad(-2), 1), Point(np.deg2rad(0), 0))
+    pendulum_left = TrapezoidFunction(Point(np.deg2rad(3), 0), Point(
+        np.deg2rad(8), 1), Point(np.deg2rad(13), 1), Point(np.deg2rad(13), 0))
+    pendulum_right = TrapezoidFunction(Point(np.deg2rad(-13), 0), Point(
+        np.deg2rad(-13), 1), Point(np.deg2rad(-8), 1), Point(np.deg2rad(-3), 0))
+
+    # angular speed
+    pendulum_zero_speed = TriangleFunction(
+        Point(-0.005, 0), Point(0, 1), Point(0.005, 0))
+    pendulum_slow_left = TriangleFunction(
+        Point(0, 0), Point(0.006, 1), Point(0.01, 0))
+    pendulum_slow_right = TriangleFunction(
+        Point(-0.01, 0), Point(-0.006, 1), Point(0, 0))
+    pendulum_fast_left = TrapezoidFunction(
+        Point(0.009, 0), Point(0.014, 1), Point(1, 1), Point(1, 0))
+    pendulum_fast_right = TrapezoidFunction(
+        Point(-1, 0), Point(-1, 1), Point(-0.014, 1), Point(-0.009, 0))
+
+    # cart position
+    cart_in_zero = TriangleFunction(
+        Point(-1, 0), Point(0, 1), Point(1, 0))
+    cart_on_left = TriangleFunction(
+        Point(-40, 0), Point(-40, 1), Point(-0.8, 0))
+    cart_on_right = TriangleFunction(
+        Point(0.8, 0), Point(40, 1), Point(40, 0))
+
+    # cart speed
+    cart_zero_speed = TriangleFunction(
+        Point(-0.5, 0), Point(0, 1), Point(0.5, 0))
+    cart_slowly_right = TriangleFunction(
+        Point(0.3, 0), Point(0.5, 1), Point(0.11, 0))
+    cart_slowly_left = TriangleFunction(
+        Point(-0.11, 0), Point(-0.5, 1), Point(-0.3, 0))
+    cart_fast_right = TrapezoidFunction(
+        Point(0.1, 0), Point(0.2, 1), Point(2, 1), Point(2, 0)
+    )
+    cart_fast_left = TrapezoidFunction(
+        Point(-2, 0), Point(-2, 1), Point(-0.2, 1), Point(-0.1, 0)
+    )
+
+    # force
+    # cart_nothing = TrapezoidFunction(
+    #     Point(-0.5, 0), Point(-0.3, 1), Point(0.3, 1), Point(0.5, 0))
+    # cart_light_left = TrapezoidFunction(
+    #     Point(-15, 0), Point(-10, 1), Point(-1, 1), Point(0, 0))
+    # cart_light_right = TrapezoidFunction(
+    #     Point(0, 0), Point(1, 1), Point(10, 1), Point(15, 0))
+    # cart_strong_left = TrapezoidFunction(
+    #     Point(-100, 0), Point(-100, 1), Point(-16, 1), Point(-13, 0))
+    # cart_strong_right = TrapezoidFunction(
+    #     Point(13, 0), Point(16, 1), Point(100, 1), Point(100, 0))
+    cart_nothing: float = 0
+    cart_light_left: float = -5
+    cart_light_right: float = 5
+    cart_midium_left: float = -50
+    cart_midium_right: float = 50
+    cart_strong_left: float = -100
+    cart_strong_right: float = 100
+    cart_force_values: type.List[float] = [cart_nothing, cart_light_left, cart_light_right,
+                                           cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right]
+    #    [cart_nothing, cart_light_left, cart_light_right,
+    #    cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right, cart_nothing, cart_light_left, cart_light_right, cart_light_left - 3, cart_light_right + 3]
 
     def fuzzy_not(self, value: float) -> float:
         return 1 - value
@@ -227,90 +337,6 @@ class InvertedPendulum(QtGui.QWidget):
     def fuzzy_or(self, *args: float) -> float:
         return max(args)
 
-    def fuzzy_pendulum_on_right(self, theta: float) -> float:
-        if(theta < -pi/18):
-            return 1
-        elif theta > 0:
-            return 0
-        else:
-            return (-18/pi) * theta
-
-    def fuzzy_pendulum_on_left(self, theta: float) -> float:
-        if(theta > pi/18):
-            return 1
-        elif theta < 0:
-            return 0
-        else:
-            return (18/pi) * theta
-
-    def fuzzy_pendulum_slow_ratation_left(self, dtheta: float) -> float:
-        if(dtheta <= 0.005):
-            return dtheta * 200
-        elif dtheta < 0.01:
-            return 1
-        elif dtheta < 0.03:
-            return (-50 * dtheta) + 1.5
-        else:
-            return 0
-
-    def fuzzy_pendulum_slow_ratation_right(self, dtheta: float) -> float:
-        if(abs(dtheta) >= -0.005):
-            return -dtheta * 200
-        elif dtheta > -0.01:
-            return 1
-        elif dtheta > -0.03:
-            return (-50 * -dtheta) + 1.5
-        else:
-            return 0
-
-    def fuzzy_pendulum_fast_ratation_left(self, dtheta: float) -> float:
-        if(dtheta > 0.04):
-            return 1
-        elif dtheta < 0.02:
-            return 0
-        else:
-            return (50 * dtheta) - 1
-
-    def fuzzy_pendulum_fast_ratation_right(self, dtheta: float) -> float:
-        if(dtheta < -0.04):
-            return 1
-        elif dtheta > -0.02:
-            return 0
-        else:
-            return (50 * -dtheta) - 1
-
-    def fuzzy_cart_slowly_right(self, force: float) -> float:
-        if force <= 5:
-            return 1
-        elif force < 10:
-            return (-force/5) + 2
-        else:
-            return 0
-
-    def fuzzy_cart_fastly_right(self, force: float) -> float:
-        if force < 5:
-            return 0
-        elif force <= 10:
-            return (force/5) - 1
-        else:
-            return 1
-
-    def fuzzy_cart_slowly_left(self, force: float) -> float:
-        if force > -5:
-            return 1
-        elif force >= -10:
-            return force/5 + 2
-        else:
-            return 0
-
-    def fuzzy_cart_fastly_left(self, force: float) -> float:
-        if force > -5:
-            return 0
-        elif force >= -10:
-            return -force/5 - 1
-        else:
-            return 1
-
     def calc_regulator_output(self, xValues: type.List[float], yValues: type.List[float]) -> float:
         points: type.List[type.List[float]] = []
         for x, y in zip(xValues, yValues):
@@ -319,10 +345,20 @@ class InvertedPendulum(QtGui.QWidget):
         try:
             centerOfMass = np.average(points, axis=0, weights=yValues)
         except ZeroDivisionError:
-            print('ZERO')
+            # print('ZERO')
             return 0
 
         return centerOfMass[0]
+
+    def calc_regulator_output_v2(self, values: type.List[float], weights: type.List[float]) -> float:
+        output: float = 0
+        try:
+            output = np.average(values, axis=0, weights=weights)
+        except ZeroDivisionError:
+            # print('ZERO')
+            return 0
+
+        return output
 
     def cut_off_value(self, value: float, treshold: float) -> float:
         if value > treshold:
