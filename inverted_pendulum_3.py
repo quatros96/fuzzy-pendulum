@@ -156,6 +156,7 @@ class InvertedPendulum(QtGui.QWidget):
     # Regulator rozmyty, który trzeba zaimplementować
     def fuzzy_control(self, x, theta, dx, dtheta):
 
+        # reguły utrzymujące wahadło w pionie z gasnącymi oscylacjami
         doNothing: float = self.fuzzy_and(self.pendulum_in_center.value(
             theta), self.pendulum_zero_speed.value(dtheta))
 
@@ -169,37 +170,19 @@ class InvertedPendulum(QtGui.QWidget):
         goStrongRight: float = self.fuzzy_and(self.pendulum_right.value(theta), self.fuzzy_or(
             self.pendulum_slow_right.value(theta), self.pendulum_fast_right.value(theta)))
 
-        pushLeft: float = self.fuzzy_and(self.pendulum_slightly_left.value(
-            theta), self.pendulum_zero_speed.value(dtheta))
-
-        pushRight: float = self.fuzzy_and(self.pendulum_slightly_right.value(
-            theta), self.pendulum_zero_speed.value(dtheta))
-
         pushLightLeft: float = self.fuzzy_and(self.fuzzy_not(self.pendulum_in_center.value(
             theta)), self.pendulum_slow_left.value(dtheta))
 
         pushLightRight: float = self.fuzzy_and(self.fuzzy_not(self.pendulum_in_center.value(
             theta)), self.pendulum_slow_right.value(dtheta))
 
-        cartOnZero: float = self.cart_in_zero.value(x)
-        cartToRight: float = self.fuzzy_and(self.cart_on_left.value(x), self.fuzzy_or(
-            self.pendulum_in_center.value(theta), self.pendulum_slightly_right.value(theta)), self.cart_zero_speed.value(dx), self.fuzzy_not(self.fuzzy_or(self.cart_fast_right.value(dx), self.cart_slowly_right.value(dx))))
-        cartToLeft: float = self.fuzzy_and(self.cart_on_right.value(x), self.fuzzy_or(
-            self.pendulum_in_center.value(theta), self.pendulum_slightly_left.value(theta)), self.cart_zero_speed.value(dx), self.fuzzy_not(self.fuzzy_or(self.cart_fast_left.value(dx), self.cart_slowly_left.value(dx))))
-
-        brake_on_left = self.fuzzy_and(
-            self.cart_in_zero.value(x), self.cart_fast_right.value(dx))
-        brake_on_right = self.fuzzy_and(
-            self.cart_in_zero.value(x), self.cart_fast_left.value(dx))
-
         #cart_nothing, cart_light_left, cart_light_right, cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right
         weights: type.List[float] = [doNothing, pushLightLeft,
                                      pushLightRight,  goLeft, goRight, goStrongLeft, goStrongRight]
+
         regulator_output: float = self.calc_regulator_output(
             self.cart_force_values, weights)
-        # print(regulator_output)
-        # print(theta, dtheta)
-        # print(dx)
+
         return regulator_output
 
     #############################
@@ -261,8 +244,6 @@ class InvertedPendulum(QtGui.QWidget):
     cart_strong_right: float = 100
     cart_force_values: type.List[float] = [cart_nothing, cart_light_left, cart_light_right,
                                            cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right]
-    #    [cart_nothing, cart_light_left, cart_light_right,
-    #    cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right, cart_nothing, cart_light_left, cart_light_right, cart_light_left - 3, cart_light_right + 3]
 
     def fuzzy_not(self, value: float) -> float:
         return 1 - value
@@ -296,5 +277,5 @@ if __name__ == '__main__':
     else:
         ip = InvertedPendulum(x0=90, dx0=0, theta0=0,
                               dtheta0=0.1, ih=800, iw=1000, h_min=-80, h_max=80)
-    ip.run(sandbox=True)
+    ip.run(sandbox=False)
     exit(app.exec_())
