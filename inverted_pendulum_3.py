@@ -155,11 +155,6 @@ class InvertedPendulum(QtGui.QWidget):
 
     # Regulator rozmyty, który trzeba zaimplementować
     def fuzzy_control(self, x, theta, dx, dtheta):
-        # forceMin: float = -100
-        # forceMax: float = 100
-        # numberOfPoints: int = 100
-        # forceValues: type.List[float] = np.linspace(
-        #     forceMin, forceMax, numberOfPoints).tolist()
 
         doNothing: float = self.fuzzy_and(self.pendulum_in_center.value(
             theta), self.pendulum_zero_speed.value(dtheta))
@@ -200,58 +195,10 @@ class InvertedPendulum(QtGui.QWidget):
         #cart_nothing, cart_light_left, cart_light_right, cart_midium_left, cart_midium_right, cart_strong_left, cart_strong_right
         weights: type.List[float] = [doNothing, pushLightLeft,
                                      pushLightRight,  goLeft, goRight, goStrongLeft, goStrongRight]
-        #  [doNothing, pushLightLeft,
-        #  pushLightRight,  goLeft, goRight, goStrongLeft, goStrongRight, cartOnZero, cartToRight, cartToLeft, brake_on_left, brake_on_right]
-
-        # doNothingValues: type.List[float] = []
-
-        # goLeftValues: type.List[float] = []
-        # goRightValues: type.List[float] = []
-
-        # goStrongLeftValues: type.List[float] = []
-        # goStrongRightValues: type.List[float] = []
-
-        # pushLeftValues: type.List[float] = []
-        # pushRightValues: type.List[float] = []
-
-        # pushLightRightValues: type.List[float] = []
-        # pushLightLeftValues: type.List[float] = []
-
-        # for value in forceValues:
-        #     doNothingValues.append(self.cut_off_value(
-        #         self.cart_nothing.value(value), doNothing))
-        #     goLeftValues.append(self.cut_off_value(
-        #         self.cart_light_left.value(value), goLeft))
-        #     goRightValues.append(self.cut_off_value(
-        #         self.cart_light_right.value(value), goRight))
-        #     goStrongLeftValues.append(self.cut_off_value(
-        #         self.cart_strong_left.value(value), goStrongLeft))
-        #     goStrongRightValues.append(self.cut_off_value(
-        #         self.cart_strong_right.value(value), goStrongRight))
-
-        #     pushLeftValues.append(self.cut_off_value(
-        #         self.cart_strong_left.value(value), pushLeft))
-        #     pushRightValues.append(self.cut_off_value(
-        #         self.cart_strong_right.value(value), pushRight))
-
-        #     pushLightLeftValues.append(self.cut_off_value(
-        #         self.cart_light_left.value(value), pushLightLeft))
-        #     pushLightRightValues.append(self.cut_off_value(
-        #         self.cart_light_right.value(value), pushLightRight))
-
-        # finalValues: type.List[float] = []
-
-        # for num in range(numberOfPoints):
-        #     value: float = self.fuzzy_or(
-        #         doNothingValues[num], goLeftValues[num], goRightValues[num], goStrongLeftValues[num], goStrongRightValues[num])
-        #     finalValues.append(value)
-
-        # regulator_output: float = self.calc_regulator_output(
-        #     forceValues, finalValues)
-        regulator_output: float = self.calc_regulator_output_v2(
+        regulator_output: float = self.calc_regulator_output(
             self.cart_force_values, weights)
         # print(regulator_output)
-        #print(theta, dtheta)
+        # print(theta, dtheta)
         # print(dx)
         return regulator_output
 
@@ -259,7 +206,7 @@ class InvertedPendulum(QtGui.QWidget):
     # ADDED FUNCTIONS/VARIABLES #
     #############################
 
-    # position
+    # angular position
     pendulum_in_center = TriangleFunction(
         Point(np.deg2rad(-1), 0), Point(0, 1), Point(np.deg2rad(1), 0))
     pendulum_slightly_left = TriangleFunction(
@@ -305,17 +252,6 @@ class InvertedPendulum(QtGui.QWidget):
         Point(-2, 0), Point(-2, 1), Point(-0.2, 1), Point(-0.1, 0)
     )
 
-    # force
-    # cart_nothing = TrapezoidFunction(
-    #     Point(-0.5, 0), Point(-0.3, 1), Point(0.3, 1), Point(0.5, 0))
-    # cart_light_left = TrapezoidFunction(
-    #     Point(-15, 0), Point(-10, 1), Point(-1, 1), Point(0, 0))
-    # cart_light_right = TrapezoidFunction(
-    #     Point(0, 0), Point(1, 1), Point(10, 1), Point(15, 0))
-    # cart_strong_left = TrapezoidFunction(
-    #     Point(-100, 0), Point(-100, 1), Point(-16, 1), Point(-13, 0))
-    # cart_strong_right = TrapezoidFunction(
-    #     Point(13, 0), Point(16, 1), Point(100, 1), Point(100, 0))
     cart_nothing: float = 0
     cart_light_left: float = -5
     cart_light_right: float = 5
@@ -337,25 +273,11 @@ class InvertedPendulum(QtGui.QWidget):
     def fuzzy_or(self, *args: float) -> float:
         return max(args)
 
-    def calc_regulator_output(self, xValues: type.List[float], yValues: type.List[float]) -> float:
-        points: type.List[type.List[float]] = []
-        for x, y in zip(xValues, yValues):
-            points.append([x, y])
-        # print(yValues)
-        try:
-            centerOfMass = np.average(points, axis=0, weights=yValues)
-        except ZeroDivisionError:
-            # print('ZERO')
-            return 0
-
-        return centerOfMass[0]
-
-    def calc_regulator_output_v2(self, values: type.List[float], weights: type.List[float]) -> float:
+    def calc_regulator_output(self, values: type.List[float], weights: type.List[float]) -> float:
         output: float = 0
         try:
             output = np.average(values, axis=0, weights=weights)
         except ZeroDivisionError:
-            # print('ZERO')
             return 0
 
         return output
